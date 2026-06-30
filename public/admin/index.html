@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>پنل مدیریت | YDA — یاسمین دولتشاهی</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#05070d">
+
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2305070d'/><text x='50' y='68' font-size='52' font-weight='bold' text-anchor='middle' font-family='Arial'><tspan fill='%23fff'>Y</tspan><tspan fill='%232563eb'>D</tspan><tspan fill='%23fff'>A</tspan></text></svg>">
+
+  <link rel="preload" href="/fonts/Vazirmatn.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/fonts/vazirmatn.css">
+  <link rel="stylesheet" href="/admin/admin.css?v=20260630114030">
+</head>
+<body>
+  <div class="boot-loading" id="bootLoading">
+    <div class="spinner"></div>
+    <p>در حال بارگذاری پنل مدیریت…</p>
+  </div>
+
+  <!-- Load order matters: core defines ApiAdmin/PAGES/initAdmin, then page modules register PAGES.* -->
+  <script src="/admin/admin-core.js?v=20260630114030"></script>
+  <script src="/admin/admin-dashboard.js?v=20260630114030"></script>
+  <script src="/admin/admin-content.js?v=20260630114030"></script>
+</body>
+</html>
