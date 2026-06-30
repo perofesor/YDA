@@ -324,15 +324,9 @@ async function renderHome() {
     </div>
   </section>
 
-  <!-- FEATURES -->
+  <!-- FEATURES (removed — spacing preserved) -->
   <section class="features-bar"><div class="container">
-    <div class="features-grid">
-      ${services.map((s, i) => `
-        <div class="feature-card reveal d${(i % 4) + 1}">
-          <div class="feature-icon">${ICONS[s.icon] || ICONS.diamond}</div>
-          <h4>${s.title}</h4><p>${s.description || ''}</p>
-        </div>`).join('')}
-    </div>
+    <div class="features-spacer" aria-hidden="true"></div>
   </div></section>
 
   <!-- PROJECTS -->
