@@ -2,6 +2,7 @@ node_modules/
 data/*.db
 data/*.db-shm
 data/*.db-wal
+data/*.db.tmp
 public/uploads/*
 !public/uploads/.gitkeep
 .env

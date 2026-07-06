@@ -2,11 +2,14 @@
   "name": "yda-site",
   "version": "1.0.0",
   "description": "YDA - Yasmin Dolatshahi Architecture | Personal branding website with full admin CRM panel",
-  "main": "src/server.js",
+  "main": "app.js",
   "type": "commonjs",
+  "engines": {
+    "node": ">=20 <23"
+  },
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node src/server.js",
+    "start": "node app.js",
+    "dev": "node app.js",
     "seed": "node src/db/seed.js"
   },
   "keywords": [
@@ -20,7 +23,6 @@
   "license": "MIT",
   "dependencies": {
     "bcryptjs": "^2.4.3",
-    "better-sqlite3": "^11.3.0",
     "compression": "^1.7.4",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
@@ -30,6 +32,7 @@
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
-    "slugify": "^1.6.6"
+    "slugify": "^1.6.6",
+    "sql.js": "^1.14.1"
   }
 }

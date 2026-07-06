@@ -42,22 +42,22 @@ A complete, production‑ready personal‑branding website for an architecture s
 | لایه | تکنولوژی |
 |------|----------|
 | Backend | Node.js 20, Express 4 |
-| Database | SQLite (better‑sqlite3, WAL mode) |
+| Database | SQLite (sql.js — WebAssembly، بدون کامپایل Native) |
 | Auth | JWT (jsonwebtoken) + bcryptjs |
 | Uploads | multer (تصویر/PDF/نقشه/zip …) |
 | Security | helmet, cors, express‑rate‑limit |
 | Frontend | Vanilla JS SPA (بدون فریم‌ورک)، CSS سفارشی |
 | Font | Vazirmatn (self‑hosted woff2) |
-| Process | PM2 |
+| Process | سازگار با cPanel Node.js (Phusion Passenger) |
 
-بدون مرحلهٔ build — فرانت‌اند با Vanilla JS اجرا می‌شود.
+بدون مرحلهٔ build و بدون ماژول Native — فقط `npm install` سپس اجرا. فرانت‌اند با Vanilla JS اجرا می‌شود و دیتابیس با موتور WebAssembly SQLite (`sql.js`) کار می‌کند؛ به همین دلیل روی هاست اشتراکی cPanel بدون SSH، بدون Terminal و بدون کامپایلر قابل اجراست.
 
 ---
 
 ## 🚀 راه‌اندازی / Getting Started
 
 ### پیش‌نیازها
-- Node.js نسخه ۱۸ یا بالاتر
+- Node.js نسخه ۲۰ یا ۲۲ (LTS)
 
 ### نصب
 ```bash
@@ -71,16 +71,16 @@ cp .env.example .env   # سپس مقادیر را ویرایش کنید
 npm run dev      # nodemon
 ```
 
-### اجرا (Production با PM2)
+### اجرا (Production)
 ```bash
-pm2 start ecosystem.config.js
-pm2 logs yda-site
+npm start        # node app.js
 ```
 
-### اجرای ساده
-```bash
-npm start        # node src/server.js
-```
+### استقرار روی cPanel (بدون SSH)
+۱. مخزن را در بخش **Git™ Version Control** کلون کنید.
+۲. در **Setup Node.js App**، فایل استارتاپ را روی `app.js` تنظیم کنید.
+۳. دکمهٔ **Run NPM Install** را بزنید.
+۴. **Restart App** را بزنید. تمام — بدون build، بدون کامپایل.
 
 سایت روی پورت تعریف‌شده در `.env` (پیش‌فرض **8100**) اجرا می‌شود:
 - وب‌سایت: `http://localhost:8100`
@@ -120,7 +120,7 @@ npm start        # node src/server.js
 
 ```
 yda-site/
-├── ecosystem.config.js      # پیکربندی PM2
+├── app.js                   # فایل استارتاپ سازگار با cPanel
 ├── package.json
 ├── .env / .env.example
 ├── data/                    # دیتابیس SQLite (به‌صورت خودکار ساخته می‌شود)

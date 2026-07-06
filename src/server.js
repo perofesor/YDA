@@ -9,14 +9,11 @@ const fs = require('fs');
 
 const config = require('./config');
 const db = require('./db');
+const { initDb } = require('./db');
 const { migrate } = require('./db/schema');
 const { ensureSeed } = require('./db/seed');
 const apiRoutes = require('./routes/api');
 const { getAllSettings } = require('./controllers/settings.controller');
-
-// --- Initialize DB ---
-migrate();
-ensureSeed();
 
 const app = express();
 app.set('trust proxy', 1);
@@ -125,11 +122,23 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ ok: false, error: err.message || 'خطای داخلی سرور' });
 });
 
-app.listen(config.port, '0.0.0.0', () => {
-  console.log(`\n  ✦ YDA Studio running on http://0.0.0.0:${config.port}`);
-  console.log(`  ✦ Public site:  ${config.siteUrl}`);
-  console.log(`  ✦ Admin panel:  ${config.siteUrl}/admin`);
-  console.log(`  ✦ Admin login:  ${config.admin.email}\n`);
+// --- Bootstrap: initialize the WASM SQLite engine, migrate & seed, then listen ---
+async function bootstrap() {
+  await initDb();
+  migrate();
+  ensureSeed();
+
+  app.listen(config.port, '0.0.0.0', () => {
+    console.log(`\n  ✦ YDA Studio running on http://0.0.0.0:${config.port}`);
+    console.log(`  ✦ Public site:  ${config.siteUrl}`);
+    console.log(`  ✦ Admin panel:  ${config.siteUrl}/admin`);
+    console.log(`  ✦ Admin login:  ${config.admin.email}\n`);
+  });
+}
+
+bootstrap().catch((err) => {
+  console.error('[FATAL] Failed to start server:', err);
+  process.exit(1);
 });
 
 module.exports = app;

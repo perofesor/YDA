@@ -208,9 +208,14 @@ module.exports = { ensureSeed };
 
 // Allow running directly: node src/db/seed.js
 if (require.main === module) {
+  const { initDb } = require('./index');
   const { migrate } = require('./schema');
-  migrate();
-  ensureSeed();
-  console.log('Seed complete.');
-  process.exit(0);
+  (async () => {
+    await initDb();
+    migrate();
+    ensureSeed();
+    db.flush();
+    console.log('Seed complete.');
+    process.exit(0);
+  })();
 }
