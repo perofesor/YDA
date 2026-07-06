@@ -9,7 +9,7 @@ const fs = require('fs');
 
 const config = require('./config');
 const db = require('./db');
-const { initDb } = require('./db');
+const { initDb, isReady, whenReady } = require('./db');
 const { migrate } = require('./db/schema');
 const { ensureSeed } = require('./db/seed');
 const apiRoutes = require('./routes/api');
@@ -17,6 +17,50 @@ const { getAllSettings } = require('./controllers/settings.controller');
 
 const app = express();
 app.set('trust proxy', 1);
+app.disable('x-powered-by');
+
+/* ============================================================================
+ *  DATABASE BOOTSTRAP (cPanel / Passenger safe)
+ * ----------------------------------------------------------------------------
+ *  On cPanel the startup file is loaded with `require()` by Phusion Passenger,
+ *  which then serves requests against the EXPORTED app. Passenger does NOT wait
+ *  for async work started during module load, so the sql.js engine (async) may
+ *  not be ready when the first request lands.
+ *
+ *  To make this bullet-proof we:
+ *    1. Kick off DB init immediately at module load.
+ *    2. Gate every incoming request behind a middleware that awaits readiness.
+ *  This guarantees no request ever touches an uninitialized database, while the
+ *  app object itself is exported synchronously for Passenger to use.
+ * ========================================================================== */
+let bootError = null;
+
+const dbBootstrap = whenReady()
+  .then(() => {
+    migrate();
+    ensureSeed();
+    console.log('[YDA] Database ready (migrated & seeded).');
+  })
+  .catch((err) => {
+    bootError = err;
+    console.error('[YDA][FATAL] Database bootstrap failed:', err && err.stack ? err.stack : err);
+  });
+
+// Readiness gate — every request waits here until the DB is ready.
+app.use((req, res, next) => {
+  if (isReady()) return next();
+  if (bootError) {
+    return res.status(503).json({ ok: false, error: 'سرویس در حال راه‌اندازی مجدد است. لطفاً چند لحظه دیگر تلاش کنید.' });
+  }
+  dbBootstrap.then(() => {
+    if (bootError) {
+      return res.status(503).json({ ok: false, error: 'سرویس موقتاً در دسترس نیست.' });
+    }
+    next();
+  }).catch(() => {
+    res.status(503).json({ ok: false, error: 'سرویس موقتاً در دسترس نیست.' });
+  });
+});
 
 app.use(helmet({
   contentSecurityPolicy: false, // we serve inline styles/scripts; CSP customized below
@@ -30,6 +74,11 @@ app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 app.use(cookieParser());
+
+// --- Health check (does not require DB) ---
+app.get('/healthz', (req, res) => {
+  res.json({ ok: true, db: isReady(), bootError: bootError ? String(bootError.message || bootError) : null });
+});
 
 // --- API ---
 app.use('/api', apiRoutes);
@@ -122,23 +171,37 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ ok: false, error: err.message || 'خطای داخلی سرور' });
 });
 
-// --- Bootstrap: initialize the WASM SQLite engine, migrate & seed, then listen ---
-async function bootstrap() {
-  await initDb();
-  migrate();
-  ensureSeed();
+// Never crash the process on an unexpected error — keep the site alive & log it.
+process.on('unhandledRejection', (reason) => {
+  console.error('[YDA][unhandledRejection]', reason && reason.stack ? reason.stack : reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[YDA][uncaughtException]', err && err.stack ? err.stack : err);
+});
 
-  app.listen(config.port, '0.0.0.0', () => {
+/**
+ * Start a standalone HTTP listener (local dev / VPS only).
+ *
+ * NOTE: This is intentionally NOT called here. Under cPanel/Phusion Passenger
+ * the process must NOT call listen() — Passenger owns the socket, and a manual
+ * listen() is exactly what caused the "It works! / NodeJS" placeholder page.
+ * `app.js` decides whether to call this, based on `require.main === module`.
+ */
+function startStandalone() {
+  const server = app.listen(config.port, '0.0.0.0', () => {
     console.log(`\n  ✦ YDA Studio running on http://0.0.0.0:${config.port}`);
     console.log(`  ✦ Public site:  ${config.siteUrl}`);
     console.log(`  ✦ Admin panel:  ${config.siteUrl}/admin`);
     console.log(`  ✦ Admin login:  ${config.admin.email}\n`);
   });
+  server.on('error', (err) => {
+    console.error('[YDA][FATAL] HTTP server error:', err && err.stack ? err.stack : err);
+  });
+  return server;
 }
 
-bootstrap().catch((err) => {
-  console.error('[FATAL] Failed to start server:', err);
-  process.exit(1);
-});
-
 module.exports = app;
+// Expose helpers so the entry file (app.js) can start a standalone listener
+// and wait for the DB when it is the process entry point.
+module.exports.startStandalone = startStandalone;
+module.exports.dbBootstrap = dbBootstrap;

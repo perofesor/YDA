@@ -8,6 +8,35 @@ const $ = (s, c = document) => c.querySelector(s);
 const $$ = (s, c = document) => Array.from(c.querySelectorAll(s));
 const app = () => document.getElementById('app');
 
+/* ---------- Content helpers (admin-controlled texts / alignment / visibility) ----------
+   These let the admin panel override EVERY section text, control text alignment
+   (right/center/left/justify) and show/hide sections — all via the settings
+   key/value store, without changing the layout/CSS. */
+
+// Text override: returns the admin-set value for `key`, else the built-in fallback.
+function T(key, fallback = '') {
+  const v = SETTINGS[key];
+  if (v === undefined || v === null || String(v).trim() === '') return fallback;
+  return v;
+}
+
+// Alignment style attribute from a `<key>_align` setting (e.g. hero_align).
+// Accepts: right | center | left | justify. Returns '' when unset (keeps design default).
+function AL(key) {
+  const v = SETTINGS[key + '_align'];
+  const ok = ['right', 'center', 'left', 'justify'];
+  if (v && ok.includes(String(v))) return ` style="text-align:${v}"`;
+  return '';
+}
+
+// Section visibility: hidden only when the `show_<key>` setting is explicitly 'off'/false/'0'.
+function visible(key) {
+  const v = SETTINGS['show_' + key];
+  if (v === undefined || v === null || v === '') return true;
+  const s = String(v).toLowerCase();
+  return !(s === 'off' || s === 'false' || s === '0' || s === 'no' || s === 'hidden');
+}
+
 /* ---------- Boot ---------- */
 async function boot() {
   try {
@@ -306,65 +335,68 @@ async function renderHome() {
   const sidePosts = allPosts.slice(1, 4);
 
   app().innerHTML = `
+  ${visible('hero') ? `
   <!-- HERO -->
   <section class="hero">
     <div class="hero-bg"><img src="${SETTINGS.hero_image || '/images/hero-villa.webp'}" alt="YDA Architecture" fetchpriority="high"></div>
     <div class="hero-social">${socialLinks('hero')}</div>
     <div class="container">
-      <div class="hero-content fade-in">
-        <div class="hero-brand">Y<span>D</span>A</div>
-        <h1 class="hero-title">${SETTINGS.hero_title || 'یاسمین دولتشاهی'}</h1>
-        <div class="hero-subtitle">${SETTINGS.hero_subtitle || 'معماری، فراتر از تصویر'}</div>
-        <p class="hero-desc">${SETTINGS.hero_description || ''}</p>
+      <div class="hero-content fade-in"${AL('hero')}>
+        <div class="hero-brand">${T('hero_brand', 'Y<span>D</span>A')}</div>
+        <h1 class="hero-title">${T('hero_title', 'یاسمین دولتشاهی')}</h1>
+        <div class="hero-subtitle">${T('hero_subtitle', 'معماری، فراتر از تصویر')}</div>
+        <p class="hero-desc">${T('hero_description', '')}</p>
         <div class="hero-cta">
-          <a href="#/contact" class="btn btn-primary">ثبت پروژه ${ICONS.arrowLeft}</a>
-          <a href="#/projects" class="btn btn-outline">مشاهده پروژه‌ها</a>
+          <a href="#/contact" class="btn btn-primary">${T('hero_cta_primary', 'ثبت پروژه')} ${ICONS.arrowLeft}</a>
+          <a href="#/projects" class="btn btn-outline">${T('hero_cta_secondary', 'مشاهده پروژه‌ها')}</a>
         </div>
       </div>
     </div>
-  </section>
+  </section>` : ''}
 
   <!-- FEATURES (removed — spacing preserved) -->
   <section class="features-bar"><div class="container">
     <div class="features-spacer" aria-hidden="true"></div>
   </div></section>
 
+  ${visible('projects') ? `
   <!-- PROJECTS -->
   <section class="section"><div class="container">
-    <div class="section-head reveal">
-      <span class="section-tag">نمونه‌کارها</span>
-      <h2 class="section-title">پروژه‌های منتخب</h2>
-      <p class="section-desc">مجموعه‌ای از برترین پروژه‌های طراحی و اجرا شده توسط استودیو YDA</p>
+    <div class="section-head reveal"${AL('projects_head')}>
+      <span class="section-tag">${T('projects_tag', 'نمونه‌کارها')}</span>
+      <h2 class="section-title">${T('projects_title', 'پروژه‌های منتخب')}</h2>
+      <p class="section-desc">${T('projects_desc', 'مجموعه‌ای از برترین پروژه‌های طراحی و اجرا شده توسط استودیو YDA')}</p>
     </div>
     <div class="projects-grid">${projects.map((p, i) => `<div class="reveal d${(i % 3) + 1}">${projectCard(p)}</div>`).join('')}</div>
-    <div style="text-align:center;margin-top:48px"><a href="#/projects" class="btn btn-outline">مشاهده همه پروژه‌ها ${ICONS.arrowLeft}</a></div>
-  </div></section>
+    <div style="text-align:center;margin-top:48px"><a href="#/projects" class="btn btn-outline">${T('projects_more', 'مشاهده همه پروژه‌ها')} ${ICONS.arrowLeft}</a></div>
+  </div></section>` : ''}
 
+  ${visible('about') ? `
   <!-- ABOUT -->
   <section class="section" style="background:var(--bg-2)"><div class="container">
     <div class="about-layout">
       <div class="about-img reveal"><img src="${SETTINGS.about_image || '/images/architect.webp'}" alt="${SETTINGS.about_name || ''}"></div>
-      <div class="about-content reveal d1">
-        <span class="section-tag">درباره من</span>
-        <h2>${SETTINGS.about_name || 'یاسمین دولتشاهی'}</h2>
-        <div class="about-role">${SETTINGS.about_role || 'معمار و بنیان‌گذار YDA'}</div>
-        <p>${SETTINGS.about_bio || ''}</p>
+      <div class="about-content reveal d1"${AL('about')}>
+        <span class="section-tag">${T('about_tag', 'درباره من')}</span>
+        <h2>${T('about_name', 'یاسمین دولتشاهی')}</h2>
+        <div class="about-role">${T('about_role', 'معمار و بنیان‌گذار YDA')}</div>
+        <p>${T('about_bio', '')}</p>
         <div class="about-stats">
-          <div class="stat-box"><div class="stat-num">+${SETTINGS.stat_experience || '۱۸'}</div><div class="stat-label">سال تجربه</div></div>
-          <div class="stat-box"><div class="stat-num">+${SETTINGS.stat_projects || '۲۵۰'}</div><div class="stat-label">پروژه موفق</div></div>
-          <div class="stat-box"><div class="stat-num">+${SETTINGS.stat_clients || '۱۲۰۰'}</div><div class="stat-label">کارفرمای خوشحال</div></div>
+          <div class="stat-box"><div class="stat-num">+${T('stat_experience', '۱۸')}</div><div class="stat-label">${T('stat_experience_label', 'سال تجربه')}</div></div>
+          <div class="stat-box"><div class="stat-num">+${T('stat_projects', '۲۵۰')}</div><div class="stat-label">${T('stat_projects_label', 'پروژه موفق')}</div></div>
+          <div class="stat-box"><div class="stat-num">+${T('stat_clients', '۱۲۰۰')}</div><div class="stat-label">${T('stat_clients_label', 'کارفرمای خوشحال')}</div></div>
         </div>
-        <a href="#/about" class="btn btn-primary">درباره ما بیشتر بدانید</a>
+        <a href="#/about" class="btn btn-primary">${T('about_cta', 'درباره ما بیشتر بدانید')}</a>
       </div>
     </div>
-  </div></section>
+  </div></section>` : ''}
 
+  ${feature && visible('blog') ? `
   <!-- BLOG -->
-  ${feature ? `
   <section class="section"><div class="container">
-    <div class="section-head reveal">
-      <span class="section-tag">وبلاگ و مقالات</span>
-      <h2 class="section-title">آخرین مطالب</h2>
+    <div class="section-head reveal"${AL('blog_head')}>
+      <span class="section-tag">${T('blog_tag', 'وبلاگ و مقالات')}</span>
+      <h2 class="section-title">${T('blog_title', 'آخرین مطالب')}</h2>
     </div>
     <div class="blog-layout reveal">
       <a href="#/blog/${feature.slug}" class="blog-feature">
@@ -378,19 +410,20 @@ async function renderHome() {
       </a>
       <div class="blog-side">
         ${sidePosts.map(blogSideItem).join('')}
-        <a href="#/blog" class="btn btn-outline btn-block">مشاهده همه مقالات</a>
+        <a href="#/blog" class="btn btn-outline btn-block">${T('blog_more', 'مشاهده همه مقالات')}</a>
       </div>
     </div>
   </div></section>` : ''}
 
+  ${visible('cta') ? `
   <!-- CTA -->
   <section class="section"><div class="container">
-    <div class="cta-band reveal">
-      <h2 class="section-title">پروژه‌ای در ذهن دارید؟</h2>
-      <p class="section-desc" style="margin:0 auto 28px;max-width:560px">همین حالا درخواست خود را ثبت کنید تا کارشناسان ما با شما تماس بگیرند.</p>
-      <a href="#/contact" class="btn btn-primary">شروع همکاری ${ICONS.arrowLeft}</a>
+    <div class="cta-band reveal"${AL('cta')}>
+      <h2 class="section-title">${T('cta_title', 'پروژه‌ای در ذهن دارید؟')}</h2>
+      <p class="section-desc" style="margin:0 auto 28px;max-width:560px">${T('cta_desc', 'همین حالا درخواست خود را ثبت کنید تا کارشناسان ما با شما تماس بگیرند.')}</p>
+      <a href="#/contact" class="btn btn-primary">${T('cta_button', 'شروع همکاری')} ${ICONS.arrowLeft}</a>
     </div>
-  </div></section>`;
+  </div></section>` : ''}`;
 }
 
 function projectCard(p) {
@@ -552,8 +585,8 @@ async function renderServices() {
   setMeta('خدمات | ' + SETTINGS.site_title, 'خدمات استودیو معماری YDA');
   const { services } = await API.get('/services');
   app().innerHTML = `
-  <div class="page-head"><div class="container">
-    <h1>خدمات ما</h1><p>آنچه استودیو YDA ارائه می‌دهد</p>
+  <div class="page-head"><div class="container"${AL('services_head')}>
+    <h1>${T('services_title', 'خدمات ما')}</h1><p>${T('services_desc', 'آنچه استودیو YDA ارائه می‌دهد')}</p>
     <div class="breadcrumb"><a href="#/">خانه</a> / <span>خدمات</span></div>
   </div></div>
   <section class="section"><div class="container">
@@ -574,15 +607,15 @@ async function renderServices() {
 async function renderAbout() {
   setMeta('درباره ما | ' + SETTINGS.site_title, SETTINGS.about_bio);
   app().innerHTML = `
-  <div class="page-head"><div class="container">
-    <h1>درباره ما</h1>
+  <div class="page-head"><div class="container"${AL('aboutpage_head')}>
+    <h1>${T('aboutpage_title', 'درباره ما')}</h1>
     <div class="breadcrumb"><a href="#/">خانه</a> / <span>درباره ما</span></div>
   </div></div>
   <section class="section"><div class="container">
     <div class="about-layout">
       <div class="about-img reveal"><img src="${SETTINGS.about_image || '/images/architect.webp'}" alt="${SETTINGS.about_name || ''}"></div>
-      <div class="about-content reveal d1">
-        <span class="section-tag">بیوگرافی</span>
+      <div class="about-content reveal d1"${AL('about')}>
+        <span class="section-tag">${T('aboutpage_tag', 'بیوگرافی')}</span>
         <h2>${SETTINGS.about_name || ''}</h2>
         <div class="about-role">${SETTINGS.about_role || ''}</div>
         <p>${SETTINGS.about_bio || ''}</p>

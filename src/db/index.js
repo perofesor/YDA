@@ -22,25 +22,40 @@
 
 const fs = require('fs');
 const path = require('path');
-const initSqlJs = require('sql.js');
 const config = require('../config');
+
+/**
+ * We load the PURE-JS (asm.js) build of sql.js — `sql.js/dist/sql-asm.js`.
+ *
+ * WHY the asm.js build (and not the WASM build) on cPanel:
+ *   - It is 100% JavaScript. There is NO external `.wasm` binary to locate,
+ *     fetch, MIME-type or stream-compile. On locked-down shared hosting the
+ *     WASM `locateFile` / streaming path is the most common silent failure.
+ *   - It initializes deterministically at module load with no native addon,
+ *     no node-gyp, no compiler toolchain — exactly what cPanel allows.
+ *
+ * The build is resolved defensively; if the asm.js file is ever missing we
+ * fall back to the default entry so the app still boots.
+ */
+function loadSqlJsFactory() {
+  try {
+    return require('sql.js/dist/sql-asm.js');
+  } catch (e) {
+    // Fallback to package default (may be WASM) — keeps the app booting.
+    return require('sql.js');
+  }
+}
+const initSqlJs = loadSqlJsFactory();
 
 // Ensure data directory exists
 if (!fs.existsSync(config.paths.data)) {
   fs.mkdirSync(config.paths.data, { recursive: true });
 }
 
-// Resolve the shipped WASM binary. `sql.js` restricts its package "exports",
-// so we derive the package directory from the resolvable main entry instead of
-// requiring its package.json directly.
-const WASM_PATH = path.join(
-  path.dirname(require.resolve('sql.js')),
-  'sql-wasm.wasm'
-);
-
 let SQL = null; // sql.js module
 let rawDb = null; // sql.js Database instance
 let persistTimer = null;
+let readyPromise = null; // resolves once the engine + db file are loaded
 
 /** Normalize bound parameters into the array sql.js expects. */
 function normalizeParams(params) {
@@ -188,34 +203,53 @@ const dbApi = {
 };
 
 /**
- * Initialize the WebAssembly SQLite engine and load the database file.
- * MUST be awaited once at startup before any query runs.
+ * Initialize the SQLite engine (pure-JS asm.js) and load the database file.
+ *
+ * Safe to call multiple times — the underlying work runs exactly once and the
+ * same promise is returned on every call. MUST be awaited once at startup
+ * (or gated by `whenReady()`) before any query runs.
  */
-async function initDb() {
-  if (rawDb) return dbApi;
+function initDb() {
+  if (readyPromise) return readyPromise;
 
-  const wasmBinary = fs.readFileSync(WASM_PATH);
-  SQL = await initSqlJs({ wasmBinary });
+  readyPromise = (async () => {
+    // The asm.js factory does not need a wasmBinary; passing extra opts is safe.
+    SQL = await initSqlJs();
 
-  if (fs.existsSync(config.paths.db)) {
-    const fileBuffer = fs.readFileSync(config.paths.db);
-    rawDb = new SQL.Database(fileBuffer);
-  } else {
-    rawDb = new SQL.Database();
-  }
+    if (fs.existsSync(config.paths.db)) {
+      const fileBuffer = fs.readFileSync(config.paths.db);
+      rawDb = new SQL.Database(fileBuffer);
+    } else {
+      rawDb = new SQL.Database();
+    }
 
-  rawDb.exec('PRAGMA foreign_keys = ON;');
+    rawDb.exec('PRAGMA foreign_keys = ON;');
 
-  // Persist on shutdown so no writes are lost.
-  const shutdown = () => {
-    try { dbApi.flush(); } catch (e) { /* ignore */ }
-  };
-  process.once('SIGINT', () => { shutdown(); process.exit(0); });
-  process.once('SIGTERM', () => { shutdown(); process.exit(0); });
-  process.once('exit', shutdown);
+    // Persist on shutdown so no writes are lost.
+    const shutdown = () => {
+      try { dbApi.flush(); } catch (e) { /* ignore */ }
+    };
+    process.once('SIGINT', () => { shutdown(); process.exit(0); });
+    process.once('SIGTERM', () => { shutdown(); process.exit(0); });
+    process.once('exit', shutdown);
 
-  return dbApi;
+    return dbApi;
+  })();
+
+  return readyPromise;
+}
+
+/** True once the engine is loaded and queries can run. */
+function isReady() {
+  return rawDb !== null;
+}
+
+/** Returns a promise that resolves when the DB is ready (kicks off init if needed). */
+function whenReady() {
+  return initDb();
 }
 
 module.exports = dbApi;
 module.exports.initDb = initDb;
+module.exports.isReady = isReady;
+module.exports.whenReady = whenReady;

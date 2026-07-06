@@ -42,7 +42,7 @@ A complete, production‑ready personal‑branding website for an architecture s
 | لایه | تکنولوژی |
 |------|----------|
 | Backend | Node.js 20, Express 4 |
-| Database | SQLite (sql.js — WebAssembly، بدون کامپایل Native) |
+| Database | SQLite (sql.js — موتور **JavaScript خالص / asm.js**، بدون کامپایل Native و بدون فایل WASM خارجی) |
 | Auth | JWT (jsonwebtoken) + bcryptjs |
 | Uploads | multer (تصویر/PDF/نقشه/zip …) |
 | Security | helmet, cors, express‑rate‑limit |
@@ -85,6 +85,23 @@ npm start        # node app.js
 سایت روی پورت تعریف‌شده در `.env` (پیش‌فرض **8100**) اجرا می‌شود:
 - وب‌سایت: `http://localhost:8100`
 - پنل مدیریت: `http://localhost:8100/admin`
+
+> 🩺 **بررسی سلامت:** آدرس `/(دامنه)/healthz` وضعیت آماده‌بودن دیتابیس را برمی‌گرداند
+> (`{"ok":true,"db":true}`). اگر `db:false` بود یعنی موتور دیتابیس هنوز در حال بارگذاری است.
+
+### ❗ رفع مشکل صفحهٔ پیش‌فرض «It works! / NodeJS»
+اگر پیش‌تر پس از استقرار، به‌جای سایت صفحهٔ پیش‌فرض cPanel («It works! NodeJS x.x.x») یا خطای
+`503 Service Unavailable` نمایش داده می‌شد، علت این بود که فایل استارتاپ خودش `app.listen()`
+را صدا می‌زد و این با سوکت داخلی Phusion Passenger تداخل داشت (اپلیکیشن واقعی هرگز اجرا نمی‌شد).
+این نسخه اصلاح شده است:
+- تحت **Passenger** فقط اپ Express صادر (export) می‌شود و Passenger خودش listen را انجام می‌دهد؛
+  `app.listen()` تنها هنگام اجرای مستقیم (`node app.js`) فراخوانی می‌شود.
+- دیتابیس **قبل از پاسخ‌گویی به درخواست‌ها** به‌صورت گارد (gate) آماده می‌شود؛ هیچ درخواستی روی
+  دیتابیس آماده‌نشده اجرا نمی‌شود، پس دیگر ۵۰۳ لحظهٔ بوت رخ نمی‌دهد.
+- از موتور **JavaScript خالص (asm.js)** استفاده می‌شود؛ هیچ فایل `.wasm`، هیچ `node-gyp` و هیچ
+  کامپایلری لازم نیست.
+
+بنابراین فقط **Clone → Run NPM Install → Restart App** کافی است.
 
 ---
 

@@ -421,3 +421,281 @@ PAGES.profile = async function (c) {
     catch (e) { toast(e.message, 'error'); }
   };
 };
+
+/* ============================================================
+   PAGE CONTENT & TEXTS — full site content editor
+   Lets the admin edit every text on the site, control text
+   alignment (right/center/left/justify) and show/hide sections.
+   Everything is stored in the settings key/value store, so the
+   public SPA (T() / AL() / visible() helpers) applies it live.
+   ============================================================ */
+
+// Alignment options used by alignment selectors
+const ALIGN_OPTS = [
+  ['', 'پیش‌فرض'],
+  ['right', 'راست‌چین'],
+  ['center', 'وسط‌چین'],
+  ['left', 'چپ‌چین'],
+  ['justify', 'هم‌تراز (Justify)'],
+];
+
+// A labelled text input bound to a settings key via data-s
+function pcInput(key, label, val, opts = {}) {
+  const tag = opts.textarea
+    ? `<textarea class="textarea" data-s="${key}"${opts.big ? ' style="min-height:120px"' : ''}>${esc(val || '')}</textarea>`
+    : `<input class="input" data-s="${key}" value="${esc(val || '')}">`;
+  return `<div class="field"><label>${label} <span class="pc-key">${key}</span></label>${tag}</div>`;
+}
+
+// Alignment selector bound to `<key>_align`
+function pcAlign(key, label, val) {
+  return `<div class="field"><label>${label}</label>
+    <select class="input" data-s="${key}_align">
+      ${ALIGN_OPTS.map(([v, t]) => `<option value="${v}"${String(val || '') === v ? ' selected' : ''}>${t}</option>`).join('')}
+    </select></div>`;
+}
+
+// Visibility toggle bound to `show_<key>` (default = shown)
+function pcToggle(key, label, val) {
+  const on = !(String(val ?? '').toLowerCase() === 'off' || String(val ?? '') === 'false' || String(val ?? '') === '0');
+  return `<label class="pc-switch">
+    <input type="checkbox" data-s="show_${key}" data-bool="1" ${on ? 'checked' : ''}>
+    <span class="pc-slider"></span>
+    <span class="pc-switch-label">${label}</span>
+  </label>`;
+}
+
+PAGES.pagecontent = async function (c) {
+  const { settings: s } = await ApiAdmin.get('/admin/settings');
+  const v = (k) => (s[k] === undefined || s[k] === null ? '' : s[k]);
+
+  c.innerHTML = `<div class="fade-in pagecontent">
+    <div class="pc-note card">
+      ${AICONS.alert}
+      <div>
+        <b>ویرایشگر کامل محتوای سایت.</b>
+        در این بخش می‌توانید <b>تمام متن‌های سایت</b> را تغییر دهید، <b>ترازبندی</b> هر بخش را
+        (راست‌چین / وسط‌چین / چپ‌چین / هم‌تراز) تعیین کنید و بخش‌های صفحه اصلی را
+        <b>نمایش یا مخفی</b> کنید. برای افزودن متن‌های کاملاً دلخواه به بخش «متن‌های سفارشی» بروید.
+      </div>
+    </div>
+
+    <!-- Section visibility -->
+    <div class="card"><div class="card-head"><h3>نمایش / مخفی‌سازی بخش‌های صفحه اصلی</h3></div>
+      <div class="pc-toggles">
+        ${pcToggle('hero', 'بخش هیرو (بالای صفحه)', v('show_hero'))}
+        ${pcToggle('projects', 'بخش پروژه‌های منتخب', v('show_projects'))}
+        ${pcToggle('about', 'بخش درباره ما', v('show_about'))}
+        ${pcToggle('blog', 'بخش وبلاگ / مقالات', v('show_blog'))}
+        ${pcToggle('cta', 'بخش دعوت به همکاری (CTA)', v('show_cta'))}
+      </div>
+    </div>
+
+    <!-- HERO -->
+    <div class="card"><div class="card-head"><h3>بخش هیرو (Hero)</h3></div>
+      <div class="grid-2">
+        ${pcInput('hero_brand', 'برند / لوگو (HTML مجاز)', v('hero_brand') || 'Y<span>D</span>A')}
+        ${pcInput('hero_subtitle', 'زیرعنوان', v('hero_subtitle'))}
+      </div>
+      ${pcInput('hero_title', 'عنوان اصلی', v('hero_title'))}
+      ${pcInput('hero_description', 'توضیحات', v('hero_description'), { textarea: true })}
+      <div class="grid-2">
+        ${pcInput('hero_cta_primary', 'متن دکمه اصلی', v('hero_cta_primary') || 'ثبت پروژه')}
+        ${pcInput('hero_cta_secondary', 'متن دکمه دوم', v('hero_cta_secondary') || 'مشاهده پروژه‌ها')}
+      </div>
+      ${pcAlign('hero', 'ترازبندی متن هیرو', v('hero_align'))}
+      <div class="field"><label>تصویر پس‌زمینه هیرو</label>${imageField('pcHero', v('hero_image'))}</div>
+    </div>
+
+    <!-- PROJECTS SECTION -->
+    <div class="card"><div class="card-head"><h3>بخش پروژه‌های منتخب</h3></div>
+      <div class="grid-2">
+        ${pcInput('projects_tag', 'برچسب کوچک', v('projects_tag') || 'نمونه‌کارها')}
+        ${pcInput('projects_title', 'عنوان بخش', v('projects_title') || 'پروژه‌های منتخب')}
+      </div>
+      ${pcInput('projects_desc', 'توضیح بخش', v('projects_desc') || 'مجموعه‌ای از برترین پروژه‌های طراحی و اجرا شده توسط استودیو YDA', { textarea: true })}
+      <div class="grid-2">
+        ${pcInput('projects_more', 'متن دکمه «مشاهده همه»', v('projects_more') || 'مشاهده همه پروژه‌ها')}
+        ${pcAlign('projects_head', 'ترازبندی سرتیتر بخش', v('projects_head_align'))}
+      </div>
+    </div>
+
+    <!-- ABOUT (home) -->
+    <div class="card"><div class="card-head"><h3>بخش درباره ما (صفحه اصلی)</h3></div>
+      <div class="grid-2">
+        ${pcInput('about_tag', 'برچسب کوچک', v('about_tag') || 'درباره من')}
+        ${pcInput('about_name', 'نام', v('about_name'))}
+      </div>
+      ${pcInput('about_role', 'سمت / نقش', v('about_role'))}
+      ${pcInput('about_bio', 'بیوگرافی', v('about_bio'), { textarea: true, big: true })}
+      <div class="grid-3">
+        ${pcInput('stat_experience', 'عدد سال تجربه', v('stat_experience'))}
+        ${pcInput('stat_projects', 'عدد پروژه موفق', v('stat_projects'))}
+        ${pcInput('stat_clients', 'عدد کارفرما', v('stat_clients'))}
+      </div>
+      <div class="grid-3">
+        ${pcInput('stat_experience_label', 'برچسب سال تجربه', v('stat_experience_label') || 'سال تجربه')}
+        ${pcInput('stat_projects_label', 'برچسب پروژه موفق', v('stat_projects_label') || 'پروژه موفق')}
+        ${pcInput('stat_clients_label', 'برچسب کارفرما', v('stat_clients_label') || 'کارفرمای خوشحال')}
+      </div>
+      <div class="grid-2">
+        ${pcInput('about_cta', 'متن دکمه', v('about_cta') || 'درباره ما بیشتر بدانید')}
+        ${pcAlign('about', 'ترازبندی متن درباره', v('about_align'))}
+      </div>
+      <div class="field"><label>تصویر (عکس مالک سایت)</label>${imageField('pcAbout', v('about_image'), true)}</div>
+    </div>
+
+    <!-- BLOG SECTION -->
+    <div class="card"><div class="card-head"><h3>بخش وبلاگ (صفحه اصلی)</h3></div>
+      <div class="grid-2">
+        ${pcInput('blog_tag', 'برچسب کوچک', v('blog_tag') || 'وبلاگ و مقالات')}
+        ${pcInput('blog_title', 'عنوان بخش', v('blog_title') || 'آخرین مطالب')}
+      </div>
+      <div class="grid-2">
+        ${pcInput('blog_more', 'متن دکمه «مشاهده همه»', v('blog_more') || 'مشاهده همه مقالات')}
+        ${pcAlign('blog_head', 'ترازبندی سرتیتر بخش', v('blog_head_align'))}
+      </div>
+    </div>
+
+    <!-- CTA SECTION -->
+    <div class="card"><div class="card-head"><h3>بخش دعوت به همکاری (CTA)</h3></div>
+      ${pcInput('cta_title', 'عنوان', v('cta_title') || 'پروژه‌ای در ذهن دارید؟')}
+      ${pcInput('cta_desc', 'توضیح', v('cta_desc') || 'همین حالا درخواست خود را ثبت کنید تا کارشناسان ما با شما تماس بگیرند.', { textarea: true })}
+      <div class="grid-2">
+        ${pcInput('cta_button', 'متن دکمه', v('cta_button') || 'شروع همکاری')}
+        ${pcAlign('cta', 'ترازبندی متن', v('cta_align'))}
+      </div>
+    </div>
+
+    <!-- SERVICES PAGE -->
+    <div class="card"><div class="card-head"><h3>صفحه خدمات</h3></div>
+      <div class="grid-2">
+        ${pcInput('services_title', 'عنوان صفحه', v('services_title') || 'خدمات ما')}
+        ${pcInput('services_desc', 'توضیح صفحه', v('services_desc') || 'آنچه استودیو YDA ارائه می‌دهد')}
+      </div>
+      ${pcAlign('services_head', 'ترازبندی سرتیتر صفحه', v('services_head_align'))}
+    </div>
+
+    <!-- ABOUT PAGE -->
+    <div class="card"><div class="card-head"><h3>صفحه درباره ما</h3></div>
+      <div class="grid-2">
+        ${pcInput('aboutpage_title', 'عنوان صفحه', v('aboutpage_title') || 'درباره ما')}
+        ${pcInput('aboutpage_tag', 'برچسب بیوگرافی', v('aboutpage_tag') || 'بیوگرافی')}
+      </div>
+      ${pcAlign('aboutpage_head', 'ترازبندی سرتیتر صفحه', v('aboutpage_head_align'))}
+    </div>
+
+    <!-- FOOTER -->
+    <div class="card"><div class="card-head"><h3>فوتر</h3></div>
+      ${pcInput('footer_text', 'متن فوتر', v('footer_text'))}
+    </div>
+
+    <button class="btn btn-primary" id="pcSave" style="position:sticky;bottom:20px;z-index:5">${AICONS.check} ذخیره همه تغییرات محتوا</button>
+  </div>`;
+
+  bindImageField('pcHero');
+  bindImageField('pcAbout');
+
+  A('#pcSave').onclick = async () => {
+    const body = {};
+    AA('[data-s]').forEach(el => {
+      if (el.dataset.bool) { body[el.dataset.s] = el.checked ? 'on' : 'off'; }
+      else { body[el.dataset.s] = el.value; }
+    });
+    body.hero_image = A('#pcHero').value;
+    body.about_image = A('#pcAbout').value;
+    try { await ApiAdmin.put('/admin/settings', body); toast('محتوای سایت ذخیره و اعمال شد'); }
+    catch (e) { toast(e.message, 'error'); }
+  };
+};
+
+/* ============================================================
+   CUSTOM TEXTS — add / edit / remove arbitrary settings keys
+   Admin can create any custom text block (with alignment) that
+   can be referenced on the site via its key.
+   ============================================================ */
+PAGES.customtexts = async function (c) {
+  async function load() {
+    const { settings: s } = await ApiAdmin.get('/admin/settings');
+    // Custom keys are those prefixed with `custom_` (created here).
+    const keys = Object.keys(s).filter(k => k.startsWith('custom_') && !k.endsWith('_align')).sort();
+    c.innerHTML = `<div class="fade-in">
+      <div class="pc-note card">${AICONS.alert}
+        <div><b>متن‌های سفارشی.</b> در این بخش می‌توانید هر تعداد بلوک متنی دلخواه با <b>کلید یکتا</b>
+        بسازید، ویرایش کنید، ترازبندی آن را تعیین کنید و حذف کنید. از این متن‌ها می‌توان در سایت
+        با کلید مربوطه استفاده کرد.</div>
+      </div>
+
+      <div class="card"><div class="card-head"><h3>افزودن متن سفارشی جدید</h3></div>
+        <div class="grid-2">
+          <div class="field"><label>کلید یکتا (انگلیسی، بدون فاصله)</label>
+            <input class="input" id="ctKey" placeholder="مثال: promo_banner"></div>
+          <div class="field"><label>ترازبندی</label>
+            <select class="input" id="ctAlign">${ALIGN_OPTS.map(([val, t]) => `<option value="${val}">${t}</option>`).join('')}</select>
+          </div>
+        </div>
+        <div class="field"><label>عنوان / نام نمایشی</label><input class="input" id="ctLabel" placeholder="مثال: بنر تبلیغاتی"></div>
+        <div class="field"><label>متن</label><textarea class="textarea" id="ctVal" style="min-height:100px"></textarea></div>
+        <button class="btn btn-primary" id="ctAdd">${AICONS.plus} افزودن متن</button>
+      </div>
+
+      <div class="card"><div class="card-head"><h3>متن‌های موجود (${faNum(keys.length)})</h3></div>
+        ${keys.length ? `<div class="ct-list">${keys.map(k => {
+          const meta = safeParseMeta(s[k + '__meta']);
+          const label = meta.label || k.replace('custom_', '');
+          const align = s[k + '_align'] || '';
+          return `<div class="ct-item" data-key="${k}">
+            <div class="ct-item-head">
+              <div><b>${esc(label)}</b> <span class="pc-key">${k}</span></div>
+              <button class="btn btn-icon btn-danger btn-sm" data-del="${k}">${AICONS.trash}</button>
+            </div>
+            <textarea class="textarea ct-edit" data-ekey="${k}" style="min-height:80px">${esc(s[k] || '')}</textarea>
+            <div class="grid-2" style="margin-top:8px">
+              <select class="input ct-align" data-akey="${k}">
+                ${ALIGN_OPTS.map(([val, t]) => `<option value="${val}"${align === val ? ' selected' : ''}>${t}</option>`).join('')}
+              </select>
+              <button class="btn btn-primary btn-sm" data-save="${k}">${AICONS.check} ذخیره</button>
+            </div>
+          </div>`;
+        }).join('')}</div>` : '<div class="empty">هنوز متن سفارشی‌ای ایجاد نشده است.</div>'}
+      </div>
+    </div>`;
+
+    A('#ctAdd').onclick = async () => {
+      let key = (A('#ctKey').value || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+      if (!key) return toast('کلید یکتا الزامی است', 'error');
+      if (!key.startsWith('custom_')) key = 'custom_' + key;
+      const body = {};
+      body[key] = A('#ctVal').value;
+      body[key + '_align'] = A('#ctAlign').value;
+      body[key + '__meta'] = JSON.stringify({ label: A('#ctLabel').value || key });
+      try { await ApiAdmin.put('/admin/settings', body); toast('متن سفارشی افزوده شد'); load(); }
+      catch (e) { toast(e.message, 'error'); }
+    };
+
+    AA('[data-save]').forEach(btn => btn.onclick = async () => {
+      const k = btn.dataset.save;
+      const body = {};
+      body[k] = A(`[data-ekey="${k}"]`).value;
+      body[k + '_align'] = A(`[data-akey="${k}"]`).value;
+      try { await ApiAdmin.put('/admin/settings', body); toast('ذخیره شد'); }
+      catch (e) { toast(e.message, 'error'); }
+    });
+
+    AA('[data-del]').forEach(btn => btn.onclick = () => {
+      const k = btn.dataset.del;
+      confirmDelete('این متن سفارشی حذف شود؟', async () => {
+        // Clear the value (settings store has no delete endpoint — set empty).
+        const body = {}; body[k] = ''; body[k + '_align'] = ''; body[k + '__meta'] = '';
+        try { await ApiAdmin.put('/admin/settings', body); toast('حذف شد'); load(); }
+        catch (e) { toast(e.message, 'error'); }
+      });
+    });
+  }
+  await load();
+};
+
+function safeParseMeta(v) {
+  if (!v) return {};
+  try { return typeof v === 'object' ? v : JSON.parse(v); } catch (e) { return {}; }
+}
