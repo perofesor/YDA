@@ -170,4 +170,74 @@ function migrate() {
   `);
 }
 
-module.exports = { migrate };
+/**
+ * ============================================================================
+ *  ONE-TIME CLEANUP — remove any injected ad / script / iframe from existing
+ *  rows created BEFORE the sanitizer was added (i.e. the tampered content that
+ *  was showing a third-party advertisement instead of the real YDA site).
+ * ----------------------------------------------------------------------------
+ *  Runs on every boot; it is idempotent and cheap. Clean rows are left as-is
+ *  because the sanitizer is a no-op on already-safe strings.
+ * ==========================================================================*/
+function sanitizeExistingContent() {
+  const { sanitizeHtml, sanitizeText, sanitizeUrl } = require('../utils/sanitize');
+  const { safeJSON } = require('../utils/helpers');
+
+  try {
+    // ---- Projects ----
+    const projects = db.prepare('SELECT * FROM projects').all();
+    for (const p of projects) {
+      const content = p.content ? sanitizeHtml(p.content) : p.content;
+      const summary = p.summary ? sanitizeText(p.summary) : p.summary;
+      const cover = p.cover_image ? sanitizeUrl(p.cover_image) : p.cover_image;
+      let gallery = p.gallery;
+      const g = safeJSON(p.gallery, null);
+      if (Array.isArray(g)) gallery = JSON.stringify(g.map(sanitizeUrl));
+      if (content !== p.content || summary !== p.summary || cover !== p.cover_image || gallery !== p.gallery) {
+        db.prepare('UPDATE projects SET content=?, summary=?, cover_image=?, gallery=? WHERE id=?')
+          .run(content, summary, cover, gallery, p.id);
+      }
+    }
+
+    // ---- Posts ----
+    const posts = db.prepare('SELECT * FROM posts').all();
+    for (const p of posts) {
+      const content = p.content ? sanitizeHtml(p.content) : p.content;
+      const excerpt = p.excerpt ? sanitizeText(p.excerpt) : p.excerpt;
+      const cover = p.cover_image ? sanitizeUrl(p.cover_image) : p.cover_image;
+      if (content !== p.content || excerpt !== p.excerpt || cover !== p.cover_image) {
+        db.prepare('UPDATE posts SET content=?, excerpt=?, cover_image=? WHERE id=?')
+          .run(content, excerpt, cover, p.id);
+      }
+    }
+
+    // ---- Services ----
+    const services = db.prepare('SELECT * FROM services').all();
+    for (const s of services) {
+      const title = s.title ? sanitizeText(s.title) : s.title;
+      const desc = s.description ? sanitizeText(s.description) : s.description;
+      if (title !== s.title || desc !== s.description) {
+        db.prepare('UPDATE services SET title=?, description=? WHERE id=?').run(title, desc, s.id);
+      }
+    }
+
+    // ---- Settings ----
+    const settings = db.prepare('SELECT key, value FROM settings').all();
+    for (const r of settings) {
+      if (typeof r.value !== 'string') continue;
+      const k = String(r.key).toLowerCase();
+      const isUrl = /(_image|_img|image$|_url|url$|link|social_|logo|favicon|href)/.test(k);
+      const cleaned = isUrl ? sanitizeUrl(r.value) : sanitizeText(r.value);
+      if (cleaned !== r.value) {
+        db.prepare("UPDATE settings SET value=?, updated_at=datetime('now') WHERE key=?").run(cleaned, r.key);
+      }
+    }
+
+    db.flush && db.flush();
+    console.log('[YDA][security] Existing content sanitized (ads/scripts removed if any).');
+  } catch (e) {
+    console.error('[YDA][security] sanitizeExistingContent failed:', e.message);
+  }
+}
+
+module.exports = { migrate, sanitizeExistingContent };

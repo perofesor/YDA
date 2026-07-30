@@ -1,0 +1,17 @@
+# CODEOWNERS — every change must be reviewed & approved by the repository owner.
+#
+# Combined with a Branch Protection Rule that requires review from Code Owners,
+# this makes it impossible for anyone (including a stolen collaborator account
+# or a remote attacker) to merge changes into the protected branches without
+# the owner's explicit approval.
+#
+# Replace @perofesor below if the GitHub owner handle differs.
+
+*           @perofesor
+
+# Extra guard on the highest-risk areas.
+/src/                 @perofesor
+/public/              @perofesor
+/.github/             @perofesor
+/src/utils/sanitize.js @perofesor
+/src/server.js        @perofesor

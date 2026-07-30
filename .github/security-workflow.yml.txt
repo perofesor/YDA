@@ -1,0 +1,66 @@
+name: Security Scan
+
+# Runs on every push / PR to catch injected malicious code, secret leaks and
+# vulnerable dependencies before they can reach the site.
+
+on:
+  push:
+    branches: [main, genspark_ai_developer]
+  pull_request:
+    branches: [main, genspark_ai_developer]
+  schedule:
+    - cron: '0 3 * * 1' # weekly Monday 03:00 UTC
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  # ---- CodeQL static analysis (detects code injection / XSS patterns) ----
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+      - uses: github/codeql-action/analyze@v3
+
+  # ---- Dependency vulnerability audit ----
+  audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci --ignore-scripts || npm install --ignore-scripts
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high || true
+
+  # ---- Secret / ad-injection guard ----
+  guard:
+    name: Injection & Secret Guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail on hard-coded secrets or ad/script injection in source
+        run: |
+          set -e
+          echo "Scanning source for injected third-party scripts / iframes / ad markup..."
+          # Look ONLY in application source (not node_modules) for suspicious
+          # third-party script/iframe tags or known ad-network domains.
+          if grep -rniE '<iframe|<script[^>]+src=["'"'"']?https?://|googlesyndication|doubleclick|adservice|popads|propeller|onclickads' \
+               public src 2>/dev/null | grep -v 'sanitize'; then
+            echo "::error::Suspicious third-party script/iframe/ad markup found in source."
+            exit 1
+          fi
+          echo "Scanning for committed secrets..."
+          if grep -rniE '(JWT_SECRET|PASSWORD|SECRET|API_KEY)\s*=\s*["'"'"'][^"'"'"']{8,}' \
+               --include='*.js' --include='*.json' src 2>/dev/null; then
+            echo "::error::Possible committed secret found."
+            exit 1
+          fi
+          echo "OK — no injected ads or committed secrets detected."

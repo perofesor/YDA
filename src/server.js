@@ -10,7 +10,7 @@ const fs = require('fs');
 const config = require('./config');
 const db = require('./db');
 const { initDb, isReady, whenReady } = require('./db');
-const { migrate } = require('./db/schema');
+const { migrate, sanitizeExistingContent } = require('./db/schema');
 const { ensureSeed } = require('./db/seed');
 const apiRoutes = require('./routes/api');
 const { getAllSettings } = require('./controllers/settings.controller');
@@ -39,7 +39,8 @@ const dbBootstrap = whenReady()
   .then(() => {
     migrate();
     ensureSeed();
-    console.log('[YDA] Database ready (migrated & seeded).');
+    sanitizeExistingContent(); // scrub any previously-injected ad/script/iframe
+    console.log('[YDA] Database ready (migrated, seeded & sanitized).');
   })
   .catch((err) => {
     bootError = err;
@@ -62,12 +63,46 @@ app.use((req, res, next) => {
   });
 });
 
+/* ----------------------------------------------------------------------------
+ *  Content-Security-Policy (browser-side ad/injection firewall)
+ * ----------------------------------------------------------------------------
+ *  This is the second line of defense after server-side sanitization. Even if a
+ *  malicious string ever reached the page, the browser itself refuses to:
+ *    - load or run scripts from any third-party domain  (script-src 'self')
+ *    - embed the site inside / show iframes              (frame-src 'none')
+ *    - load plugins/objects                              (object-src 'none')
+ *    - be framed by attackers (clickjacking)             (frame-ancestors 'self')
+ *  Images/fonts stay permissive (https + data:) so legitimate media works.
+ *  'unsafe-inline' is required only because the SPA builds markup/styles inline;
+ *  it does NOT weaken the critical rule that scripts may load only from 'self'.
+ * --------------------------------------------------------------------------*/
 app.use(helmet({
-  contentSecurityPolicy: false, // we serve inline styles/scripts; CSP customized below
+  contentSecurityPolicy: {
+    useDefaults: false,
+    directives: {
+      defaultSrc: ["'self'"],
+      baseUri: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrcAttr: ["'none'"],          // block inline on* handlers entirely
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+      fontSrc: ["'self'", 'data:'],
+      connectSrc: ["'self'"],
+      mediaSrc: ["'self'", 'data:', 'blob:'],
+      objectSrc: ["'none'"],              // no <object>/<embed>/<applet>
+      frameSrc: ["'none'"],               // no ad iframes
+      childSrc: ["'none'"],
+      frameAncestors: ["'self'"],         // anti-clickjacking
+      formAction: ["'self'"],
+      manifestSrc: ["'self'"],
+      upgradeInsecureRequests: [],
+    },
+  },
   crossOriginEmbedderPolicy: false,
   crossOriginOpenerPolicy: false, // avoids COOP warning when served over plain HTTP
   originAgentCluster: false,      // avoids Origin-Agent-Cluster warning over HTTP
   crossOriginResourcePolicy: { policy: 'cross-origin' },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
 }));
 app.use(compression());
 app.use(cors());
@@ -80,8 +115,18 @@ app.get('/healthz', (req, res) => {
   res.json({ ok: true, db: isReady(), bootError: bootError ? String(bootError.message || bootError) : null });
 });
 
+// --- Global API rate limit (anti brute-force / scraping) ---
+const rateLimit = require('express-rate-limit');
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300, // generous for normal browsing; blocks abusive automation
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: 'تعداد درخواست بیش از حد مجاز. کمی بعد تلاش کنید.' },
+});
+
 // --- API ---
-app.use('/api', apiRoutes);
+app.use('/api', apiLimiter, apiRoutes);
 
 // --- Static assets ---
 app.use('/uploads', express.static(config.paths.uploads, { maxAge: '7d' }));

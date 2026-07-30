@@ -1,6 +1,28 @@
 'use strict';
 const db = require('../db');
 const { makeSlug, uniqueSlug, safeJSON, estimateReadingTime } = require('../utils/helpers');
+const { sanitizeHtml, sanitizeText, sanitizeUrl } = require('../utils/sanitize');
+
+/* ----------------------------------------------------------------------------
+ *  Content-security helpers
+ *  Every admin-authored field is sanitized on the way INTO the database, so a
+ *  compromised/tampered request can never store an ad iframe, <script> or
+ *  redirect that the public site would later render with innerHTML.
+ * --------------------------------------------------------------------------*/
+function cleanRichBody(b) {
+  if (!b || typeof b !== 'object') return b;
+  const out = { ...b };
+  // Rich-text (HTML allowed, but scripts/iframes/ads stripped)
+  if (out.content !== undefined) out.content = sanitizeHtml(out.content);
+  // Plain-text fields (no markup)
+  ['title', 'summary', 'excerpt', 'location', 'area', 'year', 'client',
+   'author', 'name', 'description', 'meta_title', 'meta_description']
+    .forEach((k) => { if (out[k] !== undefined) out[k] = sanitizeText(out[k]); });
+  // URL fields
+  ['cover_image'].forEach((k) => { if (out[k] !== undefined) out[k] = sanitizeUrl(out[k]); });
+  if (Array.isArray(out.gallery)) out.gallery = out.gallery.map(sanitizeUrl);
+  return out;
+}
 
 /* ============================================================
  *  CATEGORIES
@@ -56,7 +78,16 @@ exports.deleteCategory = (req, res) => {
 function shapeProject(p) {
   if (!p) return p;
   p.gallery = safeJSON(p.gallery, []);
+  if (Array.isArray(p.gallery)) p.gallery = p.gallery.map(sanitizeUrl);
   p.featured = !!p.featured;
+  // Output sanitize (defense-in-depth): scrub any legacy poisoned row so the
+  // public site can never render an injected ad even if the DB was tampered.
+  if (p.content) p.content = sanitizeHtml(p.content);
+  ['title', 'summary', 'location', 'area', 'year', 'client',
+   'meta_title', 'meta_description'].forEach((k) => {
+    if (p[k]) p[k] = sanitizeText(p[k]);
+  });
+  if (p.cover_image) p.cover_image = sanitizeUrl(p.cover_image);
   return p;
 }
 
@@ -88,7 +119,7 @@ exports.getProject = (req, res) => {
 };
 
 exports.createProject = (req, res) => {
-  const b = req.body || {};
+  const b = cleanRichBody(req.body || {});
   if (!b.title) return res.status(400).json({ ok: false, error: 'عنوان پروژه الزامی است' });
   const slug = uniqueSlug(db, 'projects', makeSlug(b.slug || b.title));
   const info = db.prepare(`INSERT INTO projects
@@ -107,7 +138,7 @@ exports.updateProject = (req, res) => {
   const id = req.params.id;
   const cur = db.prepare('SELECT * FROM projects WHERE id=?').get(id);
   if (!cur) return res.status(404).json({ ok: false, error: 'پروژه یافت نشد' });
-  const b = req.body || {};
+  const b = cleanRichBody(req.body || {});
   let slug = cur.slug;
   if (b.slug && b.slug !== cur.slug) slug = uniqueSlug(db, 'projects', makeSlug(b.slug));
   db.prepare(`UPDATE projects SET
@@ -135,7 +166,13 @@ exports.deleteProject = (req, res) => {
 function shapePost(p) {
   if (!p) return p;
   p.featured = !!p.featured;
-  p.tags = p.tags ? String(p.tags).split(',').map(s => s.trim()).filter(Boolean) : [];
+  p.tags = p.tags ? String(p.tags).split(',').map(s => s.trim()).filter(Boolean).map(sanitizeText) : [];
+  // Output sanitize (defense-in-depth) — see shapeProject.
+  if (p.content) p.content = sanitizeHtml(p.content);
+  ['title', 'excerpt', 'author', 'meta_title', 'meta_description'].forEach((k) => {
+    if (p[k]) p[k] = sanitizeText(p[k]);
+  });
+  if (p.cover_image) p.cover_image = sanitizeUrl(p.cover_image);
   return p;
 }
 
@@ -166,7 +203,7 @@ exports.getPost = (req, res) => {
 };
 
 exports.createPost = (req, res) => {
-  const b = req.body || {};
+  const b = cleanRichBody(req.body || {});
   if (!b.title) return res.status(400).json({ ok: false, error: 'عنوان مقاله الزامی است' });
   const slug = uniqueSlug(db, 'posts', makeSlug(b.slug || b.title));
   const tags = Array.isArray(b.tags) ? b.tags.join(',') : (b.tags || null);
@@ -186,7 +223,7 @@ exports.updatePost = (req, res) => {
   const id = req.params.id;
   const cur = db.prepare('SELECT * FROM posts WHERE id=?').get(id);
   if (!cur) return res.status(404).json({ ok: false, error: 'مقاله یافت نشد' });
-  const b = req.body || {};
+  const b = cleanRichBody(req.body || {});
   let slug = cur.slug;
   if (b.slug && b.slug !== cur.slug) slug = uniqueSlug(db, 'posts', makeSlug(b.slug));
   const tags = b.tags !== undefined ? (Array.isArray(b.tags) ? b.tags.join(',') : b.tags) : cur.tags;
@@ -214,10 +251,16 @@ exports.deletePost = (req, res) => {
  * ========================================================== */
 exports.listServices = (req, res) => {
   const rows = db.prepare('SELECT * FROM services ORDER BY sort_order, id').all();
+  rows.forEach((s) => {
+    if (s.title) s.title = sanitizeText(s.title);
+    if (s.description) s.description = sanitizeText(s.description);
+    if (s.icon) s.icon = sanitizeText(s.icon);
+  });
   res.json({ ok: true, services: rows });
 };
 exports.createService = (req, res) => {
-  const { title, icon, description, sort_order } = req.body || {};
+  let { title, icon, description, sort_order } = req.body || {};
+  title = sanitizeText(title); description = sanitizeText(description); icon = sanitizeText(icon);
   if (!title) return res.status(400).json({ ok: false, error: 'عنوان الزامی است' });
   const info = db.prepare('INSERT INTO services (title, icon, description, sort_order) VALUES (?,?,?,?)')
     .run(title, icon || null, description || null, sort_order || 0);
@@ -227,7 +270,10 @@ exports.updateService = (req, res) => {
   const id = req.params.id;
   const cur = db.prepare('SELECT * FROM services WHERE id=?').get(id);
   if (!cur) return res.status(404).json({ ok: false, error: 'یافت نشد' });
-  const { title, icon, description, sort_order } = req.body || {};
+  let { title, icon, description, sort_order } = req.body || {};
+  if (title !== undefined) title = sanitizeText(title);
+  if (description !== undefined) description = sanitizeText(description);
+  if (icon !== undefined) icon = sanitizeText(icon);
   db.prepare('UPDATE services SET title=?, icon=?, description=?, sort_order=? WHERE id=?')
     .run(title ?? cur.title, icon ?? cur.icon, description ?? cur.description, sort_order ?? cur.sort_order, id);
   res.json({ ok: true, service: db.prepare('SELECT * FROM services WHERE id=?').get(id) });

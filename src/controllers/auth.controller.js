@@ -1,7 +1,21 @@
 'use strict';
 const bcrypt = require('bcryptjs');
 const db = require('../db');
+const config = require('../config');
 const { signToken } = require('../middleware/auth');
+
+// Secure cookie options — HttpOnly (no JS access), SameSite (CSRF hardening),
+// and Secure over HTTPS so the admin token can never leak to third parties.
+function cookieOptions() {
+  const isHttps = /^https:/i.test(config.siteUrl) || config.env === 'production';
+  return {
+    httpOnly: true,
+    sameSite: 'strict',
+    secure: isHttps,
+    path: '/',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  };
+}
 
 exports.login = (req, res) => {
   const { email, password } = req.body || {};
@@ -13,11 +27,7 @@ exports.login = (req, res) => {
     return res.status(401).json({ ok: false, error: 'ایمیل یا رمز عبور اشتباه است' });
   }
   const token = signToken(user);
-  res.cookie('yda_token', token, {
-    httpOnly: true,
-    sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  });
+  res.cookie('yda_token', token, cookieOptions());
   res.json({
     ok: true,
     token,
@@ -26,7 +36,7 @@ exports.login = (req, res) => {
 };
 
 exports.logout = (req, res) => {
-  res.clearCookie('yda_token');
+  res.clearCookie('yda_token', { path: '/' });
   res.json({ ok: true });
 };
 
