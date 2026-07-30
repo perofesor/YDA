@@ -52,8 +52,9 @@ jobs:
           echo "Scanning source for injected third-party scripts / iframes / ad markup..."
           # Look ONLY in application source (not node_modules) for suspicious
           # third-party script/iframe tags or known ad-network domains.
-          if grep -rniE '<iframe|<script[^>]+src=["'"'"']?https?://|googlesyndication|doubleclick|adservice|popads|propeller|onclickads' \
-               public src 2>/dev/null | grep -v 'sanitize'; then
+          # (sanitize.js / safe.js legitimately reference these names as data.)
+          if grep -rniE '<iframe[[:space:]]|<script[^>]+src=["'"'"']?https?://|googlesyndication|doubleclick|adservice|popads|propeller|onclickads' \
+               public src 2>/dev/null | grep -vE 'sanitize|safe\.js'; then
             echo "::error::Suspicious third-party script/iframe/ad markup found in source."
             exit 1
           fi

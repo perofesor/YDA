@@ -17,7 +17,9 @@ const app = () => document.getElementById('app');
 function T(key, fallback = '') {
   const v = SETTINGS[key];
   if (v === undefined || v === null || String(v).trim() === '') return fallback;
-  return v;
+  // Client-side safety net: strip any executable/ad markup that might have
+  // slipped through, while keeping simple inline formatting (e.g. hero_brand).
+  return (typeof window.SafeHTML === 'function') ? window.SafeHTML(String(v)) : v;
 }
 
 // Alignment style attribute from a `<key>_align` setting (e.g. hero_align).
@@ -234,7 +236,7 @@ function socialLinks(size = 'footer') {
     ['social_bale', 'bale'], ['social_eitaa', 'eitaa'],
   ];
   return items.filter(([k]) => SETTINGS[k]).map(([k, icon]) =>
-    `<a href="${SETTINGS[k]}" target="_blank" rel="noopener" aria-label="${icon}">${ICONS[icon]}</a>`).join('');
+    `<a href="${SafeURL(SETTINGS[k])}" target="_blank" rel="noopener" aria-label="${icon}">${ICONS[icon]}</a>`).join('');
 }
 
 function renderFooter() {
@@ -247,7 +249,7 @@ function renderFooter() {
     <div class="footer-grid">
       <div class="footer-col">
         <div class="footer-brand-logo">${logoBlock()}</div>
-        <p>${SETTINGS.site_description || ''}</p>
+        <p>${SafeText(SETTINGS.site_description || '')}</p>
         <div class="footer-social">${socialLinks()}</div>
       </div>
       <div class="footer-col">
@@ -267,9 +269,9 @@ function renderFooter() {
       </div>
       <div class="footer-col">
         <h4>اطلاعات تماس</h4>
-        ${SETTINGS.contact_address ? `<div class="contact-row">${ICONS.mapPin}<span>${SETTINGS.contact_address}</span></div>` : ''}
-        ${SETTINGS.contact_phone ? `<a class="contact-row" href="tel:${SETTINGS.contact_phone}">${ICONS.phone}<span>${SETTINGS.contact_phone}</span></a>` : ''}
-        ${SETTINGS.contact_email ? `<a class="contact-row" href="mailto:${SETTINGS.contact_email}">${ICONS.mail}<span>${SETTINGS.contact_email}</span></a>` : ''}
+        ${SETTINGS.contact_address ? `<div class="contact-row">${ICONS.mapPin}<span>${SafeText(SETTINGS.contact_address)}</span></div>` : ''}
+        ${SETTINGS.contact_phone ? `<a class="contact-row" href="tel:${SafeText(SETTINGS.contact_phone)}">${ICONS.phone}<span>${SafeText(SETTINGS.contact_phone)}</span></a>` : ''}
+        ${SETTINGS.contact_email ? `<a class="contact-row" href="mailto:${SafeText(SETTINGS.contact_email)}">${ICONS.mail}<span>${SafeText(SETTINGS.contact_email)}</span></a>` : ''}
         <div class="contact-row">${ICONS.clock}<span>شنبه تا چهارشنبه ۹:۰۰ - ۱۸:۰۰</span></div>
       </div>
     </div>
@@ -280,7 +282,7 @@ function renderFooter() {
       <div class="footer-badge"><span class="fb-icon">${ICONS.fast}</span><span>سرعت بالا و بهینه</span></div>
       <div class="footer-badge"><span class="fb-icon">${ICONS.diamond}</span><span>طراحی مینیمال لوکس</span></div>
     </div>
-    <div class="footer-bottom">${SETTINGS.footer_text || 'YDA Architecture Studio — تمامی حقوق محفوظ است'} &copy; ${faNum(new Date().getFullYear())} · طراحی و توسعه با <span style="color:var(--accent-2)">♦</span> برای خلق تجربه‌ای ماندگار</div>
+    <div class="footer-bottom">${SafeText(SETTINGS.footer_text) || 'YDA Architecture Studio — تمامی حقوق محفوظ است'} &copy; ${faNum(new Date().getFullYear())} · طراحی و توسعه با <span style="color:var(--accent-2)">♦</span> برای خلق تجربه‌ای ماندگار</div>
   </div>`;
 }
 
@@ -338,7 +340,7 @@ async function renderHome() {
   ${visible('hero') ? `
   <!-- HERO -->
   <section class="hero">
-    <div class="hero-bg"><img src="${SETTINGS.hero_image || '/images/hero-villa.webp'}" alt="YDA Architecture" fetchpriority="high"></div>
+    <div class="hero-bg"><img src="${SafeURL(SETTINGS.hero_image) || '/images/hero-villa.webp'}" alt="YDA Architecture" fetchpriority="high"></div>
     <div class="hero-social">${socialLinks('hero')}</div>
     <div class="container">
       <div class="hero-content fade-in"${AL('hero')}>
@@ -375,7 +377,7 @@ async function renderHome() {
   <!-- ABOUT -->
   <section class="section" style="background:var(--bg-2)"><div class="container">
     <div class="about-layout">
-      <div class="about-img reveal"><img src="${SETTINGS.about_image || '/images/architect.webp'}" alt="${SETTINGS.about_name || ''}"></div>
+      <div class="about-img reveal"><img src="${SafeURL(SETTINGS.about_image) || '/images/architect.webp'}" alt="${SafeText(SETTINGS.about_name) || ''}"></div>
       <div class="about-content reveal d1"${AL('about')}>
         <span class="section-tag">${T('about_tag', 'درباره من')}</span>
         <h2>${T('about_name', 'یاسمین دولتشاهی')}</h2>
@@ -497,7 +499,7 @@ async function renderProjectDetail(slug) {
     <div class="detail-hero"><img src="${p.cover_image || '/images/proj-1.webp'}" alt="${p.title}"></div>
     <div class="detail-layout">
       <div class="detail-content">
-        ${p.content || `<p>${p.summary || ''}</p>`}
+        ${p.content ? SafeHTML(p.content) : `<p>${p.summary || ''}</p>`}
         ${(p.gallery && p.gallery.length > 1) ? `<h3>گالری تصاویر</h3><div class="gallery-grid">${p.gallery.map(g => `<img src="${g}" alt="${p.title}" loading="lazy" onclick="openLightbox('${g}')">`).join('')}</div>` : ''}
       </div>
       <div class="detail-sidebar">
@@ -573,7 +575,7 @@ async function renderPostDetail(slug) {
       <span>${ICONS.clock} ${faNum(p.reading_time)} دقیقه مطالعه</span>
       <span>${ICONS.eye} ${faNum(p.views)} بازدید</span>
     </div>
-    <div class="detail-content">${p.content || ''}</div>
+    <div class="detail-content">${p.content ? SafeHTML(p.content) : ''}</div>
     ${p.tags && p.tags.length ? `<div style="margin-top:24px;display:flex;gap:8px;flex-wrap:wrap">${p.tags.map(t => `<span class="project-cat">#${t}</span>`).join('')}</div>` : ''}
   </div></section>`;
 }
@@ -613,12 +615,12 @@ async function renderAbout() {
   </div></div>
   <section class="section"><div class="container">
     <div class="about-layout">
-      <div class="about-img reveal"><img src="${SETTINGS.about_image || '/images/architect.webp'}" alt="${SETTINGS.about_name || ''}"></div>
+      <div class="about-img reveal"><img src="${SafeURL(SETTINGS.about_image) || '/images/architect.webp'}" alt="${SafeText(SETTINGS.about_name) || ''}"></div>
       <div class="about-content reveal d1"${AL('about')}>
         <span class="section-tag">${T('aboutpage_tag', 'بیوگرافی')}</span>
-        <h2>${SETTINGS.about_name || ''}</h2>
-        <div class="about-role">${SETTINGS.about_role || ''}</div>
-        <p>${SETTINGS.about_bio || ''}</p>
+        <h2>${SafeText(SETTINGS.about_name) || ''}</h2>
+        <div class="about-role">${SafeText(SETTINGS.about_role) || ''}</div>
+        <p>${SafeHTML(SETTINGS.about_bio || '')}</p>
         <div class="about-stats">
           <div class="stat-box"><div class="stat-num">+${SETTINGS.stat_experience || '۱۸'}</div><div class="stat-label">سال تجربه</div></div>
           <div class="stat-box"><div class="stat-num">+${SETTINGS.stat_projects || '۲۵۰'}</div><div class="stat-label">پروژه موفق</div></div>
@@ -889,7 +891,7 @@ async function renderContact() {
 }
 
 function contactMethod(key, label, sub) {
-  const link = SETTINGS['social_' + key];
+  const link = SafeURL(SETTINGS['social_' + key]);
   if (!link) return '';
   return `<a class="contact-method" href="${link}" target="_blank" rel="noopener">
     <div class="cm-icon cm-${key}">${ICONS[key]}</div>

@@ -19,6 +19,17 @@ A complete, production‑ready personal‑branding website for an architecture s
   3. **تماس** بدون افشای شمارهٔ مستقیم (واتس‌اپ / پیام‌رسان‌ها / فرم پیام)
 - لینک‌های اجتماعی: WhatsApp، Instagram، LinkedIn، Bale، Eitaa
 
+### 🛡 امنیت / Security
+- **پاکسازی سه‌لایه‌ی محتوا** در برابر تزریق تبلیغ/اسکریپت شخص ثالث (XSS):
+  1. سمت سرور هنگام ذخیره و خواندن محتوا (`src/utils/sanitize.js`)
+  2. سیاست امنیتی محتوا (CSP) در مرورگر — بلاک اسکریپت/iframe دامنه‌ی ثالث
+  3. پاکسازی نهایی در مرورگر پیش از رندر (`public/js/safe.js`)
+- **پاکسازی خودکار دیتابیس هنگام هر بوت** — هر تبلیغ/اسکریپت تزریق‌شده‌ی قبلی حذف می‌شود
+- `JWT_SECRET` امن (رد مقدار پیش‌فرض)، کوکی ادمین `HttpOnly + SameSite=strict + Secure`
+- محدودیت نرخ سراسری روی `/api` و محدودیت ورود (ضد brute-force)
+- فایل‌های سخت‌سازی گیت‌هاب: `CODEOWNERS`، Dependabot، ورک‌فلوی اسکن امنیتی
+- راهنمای کامل قفل‌کردن ریپازیتوری و ریکاوری در [`SECURITY.md`](./SECURITY.md)
+
 ### سئو / SEO
 - `sitemap.xml` و `robots.txt` پویا
 - داده‌های ساختاریافته JSON‑LD (ProfessionalService)

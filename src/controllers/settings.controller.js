@@ -9,7 +9,7 @@ const { sanitizeText, sanitizeUrl, sanitizeHtml } = require('../utils/sanitize')
  *  - everything else the public site injects as text → sanitizeText
  * The public SPA renders settings values as text / attribute values, never as
  * trusted HTML, so no key needs raw HTML. This makes it impossible to smuggle
- * an ad <script>/<iframe> through a settings field.
+ * an executable ad payload through a settings field.
  */
 function cleanSettingValue(key, value) {
   if (typeof value !== 'string') return value;
