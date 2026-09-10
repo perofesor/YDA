@@ -59,8 +59,14 @@ exports.changePassword = (req, res) => {
 };
 
 exports.updateProfile = (req, res) => {
-  const { name, email, bio, avatar } = req.body || {};
+  let { name, email, bio, avatar } = req.body || {};
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  // Profile fields are echoed by the admin panel — sanitize like every other
+  // admin-authored value so a hijacked session can't poison the panel markup.
+  const { sanitizeText, sanitizeUrl } = require('../utils/sanitize');
+  name = sanitizeText(name); email = sanitizeText(email);
+  bio = bio === undefined ? undefined : sanitizeText(bio);
+  avatar = avatar === undefined ? undefined : sanitizeUrl(avatar);
   db.prepare(
     "UPDATE users SET name = ?, email = ?, bio = ?, avatar = ?, updated_at = datetime('now') WHERE id = ?"
   ).run(name || user.name, (email || user.email).toLowerCase(), bio ?? user.bio, avatar ?? user.avatar, user.id);

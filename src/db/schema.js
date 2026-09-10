@@ -221,6 +221,27 @@ function sanitizeExistingContent() {
       }
     }
 
+    // ---- Categories (rendered raw in public filter buttons / footer) ----
+    const cats = db.prepare('SELECT * FROM categories').all();
+    for (const c of cats) {
+      const name = c.name ? sanitizeText(c.name) : c.name;
+      const desc = c.description ? sanitizeText(c.description) : c.description;
+      if (name !== c.name || desc !== c.description) {
+        db.prepare('UPDATE categories SET name=?, description=? WHERE id=?').run(name, desc, c.id);
+      }
+    }
+
+    // ---- Admin profile (name / bio / avatar are echoed by the panel) ----
+    const users = db.prepare('SELECT * FROM users').all();
+    for (const u of users) {
+      const name = u.name ? sanitizeText(u.name) : u.name;
+      const bio = u.bio ? sanitizeText(u.bio) : u.bio;
+      const avatar = u.avatar ? sanitizeUrl(u.avatar) : u.avatar;
+      if (name !== u.name || bio !== u.bio || avatar !== u.avatar) {
+        db.prepare('UPDATE users SET name=?, bio=?, avatar=? WHERE id=?').run(name, bio, avatar, u.id);
+      }
+    }
+
     // ---- Settings ----
     const settings = db.prepare('SELECT key, value FROM settings').all();
     for (const r of settings) {

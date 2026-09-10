@@ -61,6 +61,7 @@ admin.get('/analytics', dashboard.analytics);
 // Settings
 admin.get('/settings', settings.getAll);
 admin.put('/settings', settings.update);
+admin.post('/settings/reset', settings.resetSettings);
 
 // Categories
 admin.post('/categories', content.createCategory);

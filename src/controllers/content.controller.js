@@ -24,6 +24,16 @@ function cleanRichBody(b) {
   return out;
 }
 
+// Category fields rendered on the public site (filter buttons, footer links)
+// must never carry markup — same three-layer rule as the rest of the content.
+function shapeCategory(c) {
+  if (!c) return c;
+  if (c.name) c.name = sanitizeText(c.name);
+  if (c.description) c.description = sanitizeText(c.description);
+  if (c.slug) c.slug = sanitizeText(c.slug);
+  return c;
+}
+
 /* ============================================================
  *  CATEGORIES
  * ========================================================== */
@@ -43,28 +53,32 @@ exports.listCategories = (req, res) => {
       c.count = db.prepare("SELECT COUNT(*) n FROM posts WHERE category_id = ? AND status='published'").get(c.id).n;
     }
   }
-  res.json({ ok: true, categories: rows });
+  res.json({ ok: true, categories: rows.map(shapeCategory) });
 };
 
 exports.createCategory = (req, res) => {
-  const { name, type, description, sort_order } = req.body || {};
+  let { name, type, description, sort_order } = req.body || {};
+  name = sanitizeText(name); description = sanitizeText(description);
   if (!name) return res.status(400).json({ ok: false, error: 'نام دسته الزامی است' });
   const slug = uniqueSlug(db, 'categories', makeSlug(name));
   const info = db.prepare(
     'INSERT INTO categories (name, slug, type, description, sort_order) VALUES (?,?,?,?,?)'
-  ).run(name, slug, type || 'project', description || null, sort_order || 0);
-  res.json({ ok: true, category: db.prepare('SELECT * FROM categories WHERE id=?').get(info.lastInsertRowid) });
+  ).run(name, slug, sanitizeText(type) || 'project', description || null, sort_order || 0);
+  res.json({ ok: true, category: shapeCategory(db.prepare('SELECT * FROM categories WHERE id=?').get(info.lastInsertRowid)) });
 };
 
 exports.updateCategory = (req, res) => {
   const id = req.params.id;
   const cur = db.prepare('SELECT * FROM categories WHERE id=?').get(id);
   if (!cur) return res.status(404).json({ ok: false, error: 'دسته یافت نشد' });
-  const { name, type, description, sort_order } = req.body || {};
+  let { name, type, description, sort_order } = req.body || {};
+  if (name !== undefined) name = sanitizeText(name);
+  if (description !== undefined) description = sanitizeText(description);
+  if (type !== undefined) type = sanitizeText(type);
   db.prepare('UPDATE categories SET name=?, type=?, description=?, sort_order=? WHERE id=?').run(
-    name || cur.name, type || cur.type, description ?? cur.description, sort_order ?? cur.sort_order, id
+    name ?? cur.name, type ?? cur.type, description ?? cur.description, sort_order ?? cur.sort_order, id
   );
-  res.json({ ok: true, category: db.prepare('SELECT * FROM categories WHERE id=?').get(id) });
+  res.json({ ok: true, category: shapeCategory(db.prepare('SELECT * FROM categories WHERE id=?').get(id)) });
 };
 
 exports.deleteCategory = (req, res) => {

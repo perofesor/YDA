@@ -116,12 +116,27 @@ function sanitizeText(input) {
  * Sanitize a URL-ish setting (social links, image URLs). Only http(s), mailto,
  * tel, relative (/…), hash (#…) and protocol-relative (//…) URLs survive.
  * Anything else (javascript:, data:, etc.) is blanked.
+ *
+ * Attribute-breakout hardening: quote characters, angle brackets, backslashes
+ * and control/whitespace characters are stripped BEFORE the scheme check, so a
+ * URL like  https://x.com/a"><script>…  can never escape the src/href
+ * attribute it is rendered into. In a legitimate URL those bytes would be
+ * percent-encoded anyway, so nothing valid is lost.
  */
 function sanitizeUrl(input) {
   if (input === null || input === undefined) return input;
   if (typeof input !== 'string') return input;
-  const v = input.trim();
+  let v = input.trim();
   if (v === '') return v;
+  // 1) kill control chars & raw spaces, then attribute-breakout characters
+  v = v
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .replace(/\s+/g, '')
+    .replace(/["'`<>\\]/g, '');
+  if (v === '') return v;
+  // 2) bound the length — nothing legitimate is longer than 2048 chars
+  if (v.length > 2048) return '';
+  // 3) scheme allow-list
   if (/^(https?:|mailto:|tel:)/i.test(v)) return v;
   if (/^(\/|#|\.\/|\.\.\/)/.test(v)) return v;
   if (/^\/\//.test(v)) return v;

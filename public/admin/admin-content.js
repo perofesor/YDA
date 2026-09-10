@@ -378,6 +378,7 @@ PAGES.settings = async function (c) {
     </div>
 
     <button class="btn btn-primary" id="setSave" style="position:sticky;bottom:20px">${AICONS.check} ذخیره همه تنظیمات</button>
+    <button class="btn btn-ghost" id="setReset" style="position:sticky;bottom:20px;margin-top:8px">${AICONS.alert} بازیابی تنظیمات پیش‌فرض (رفع خرابی محتوا)</button>
   </div>`;
   bindImageField('setHero'); bindImageField('setAbout');
   A('#setSave').onclick = async () => {
@@ -387,6 +388,15 @@ PAGES.settings = async function (c) {
     body.about_image = A('#setAbout').value;
     try { await ApiAdmin.put('/admin/settings', body); toast('تنظیمات ذخیره شد'); } catch (e) { toast(e.message, 'error'); }
   };
+  // Recovery: restore core site texts to their known-good defaults in one click
+  // (undoes DB-level tampering of settings without wiping custom_* texts).
+  A('#setReset').onclick = () => confirmDelete('همه متن‌ها و تنظیمات اصلی سایت به حالت پیش‌فرض سالم بازگردانده شود؟ (متن‌های سفارشی دست‌نخورده می‌مانند)', async () => {
+    try {
+      await ApiAdmin.post('/admin/settings/reset', {});
+      toast('تنظیمات سایت به حالت سالم اولیه بازگشت');
+      PAGES.settings(c); // re-render with restored values
+    } catch (e) { toast(e.message, 'error'); }
+  });
 };
 
 /* ============================================================

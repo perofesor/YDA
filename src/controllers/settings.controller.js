@@ -2,6 +2,7 @@
 const db = require('../db');
 const { safeJSON } = require('../utils/helpers');
 const { sanitizeText, sanitizeUrl, sanitizeHtml } = require('../utils/sanitize');
+const { DEFAULT_SETTINGS } = require('../db/defaults');
 
 /**
  * Decide how a settings value must be sanitized based on its key.
@@ -59,3 +60,31 @@ exports.update = (req, res) => {
 };
 
 exports.getAllSettings = getAllSettings;
+
+/**
+ * POST /api/admin/settings/reset  { keys?: string[] }
+ *
+ * Recovery tool for the exact incident this repo suffered: an attacker edited
+ * the site's texts through the DB. This restores every core setting to its
+ * known-good default value (or only the listed `keys`), then re-sanitizes it.
+ * Custom (`custom_*`) keys are never touched unless explicitly listed.
+ */
+exports.resetSettings = (req, res) => {
+  const keys = Array.isArray(req.body && req.body.keys) && req.body.keys.length
+    ? req.body.keys.map(String)
+    : Object.keys(DEFAULT_SETTINGS);
+  const stmt = db.prepare(`
+    INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+  `);
+  const tx = db.transaction((list) => {
+    for (const k of list) {
+      if (!(k in DEFAULT_SETTINGS)) continue; // never wipe custom keys wholesale
+      const def = DEFAULT_SETTINGS[k];
+      const stored = typeof def === 'object' ? JSON.stringify(def) : String(def);
+      stmt.run(k, stored);
+    }
+  });
+  tx(keys);
+  res.json({ ok: true, reset: keys.filter((k) => k in DEFAULT_SETTINGS), settings: getAllSettings() });
+};
